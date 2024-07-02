@@ -142,6 +142,7 @@ func main() {
 	if err != nil {
 		klog.Exitf("Failed to create add URL: %v", err)
 	}
+
 	hammer := NewHammer(&tracker, f.Fetch, addURL)
 	hammer.Run(ctx)
 
@@ -307,7 +308,10 @@ func genLeaf(n uint64, minLeafSize int) []byte {
 func newLeafGenerator(n uint64, minLeafSize int) func() []byte {
 	const dupChance = 0.1
 	nextLeaf := genLeaf(n, minLeafSize)
+	var safe sync.Mutex
 	return func() []byte {
+		safe.Lock()
+		defer safe.Unlock()
 		if rand.Float64() <= dupChance {
 			// This one will actually be unique, but the next iteration will
 			// duplicate it. In future, this duplication could be randomly
