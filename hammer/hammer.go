@@ -158,8 +158,9 @@ func NewLeafConsumer() *LeafConsumer {
 		panic(err)
 	}
 	return &LeafConsumer{
-		leafchan: make(chan Leaf, 256),
-		lookup:   lookup,
+		leafchan:      make(chan Leaf, 256),
+		lookup:        lookup,
+		sentDuplicate: make(map[string]uint64),
 	}
 }
 
@@ -171,6 +172,8 @@ type LeafConsumer struct {
 	leafchan       chan Leaf
 	lookup         *lru.Cache[string, uint64]
 	duplicateCount uint64
+	sentCount      uint64
+	sentDuplicate  map[string]uint64
 }
 
 func (c *LeafConsumer) Run(ctx context.Context) {
@@ -180,6 +183,7 @@ func (c *LeafConsumer) Run(ctx context.Context) {
 		case <-ctx.Done(): //context cancelled
 			return
 		case l := <-c.leafchan:
+			c.sentCount++
 			strData := string(l.Data)
 			if oIdx, found := c.lookup.Get(strData); found {
 				if oIdx != l.Index {
@@ -189,6 +193,8 @@ func (c *LeafConsumer) Run(ctx context.Context) {
 			} else {
 				c.lookup.Add(strData, l.Index)
 			}
+			c.sentDuplicate[strData] += 1
+			klog.V(2).Infof("Send %d add/ requests, %d unique leaves", c.sentCount, len(c.sentDuplicate))
 		}
 	}
 }
